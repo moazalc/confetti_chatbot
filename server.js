@@ -127,6 +127,7 @@ app.get("/webhook", (req, res) => {
 });
 
 // ------------------- INCOMING MESSAGES (POST) -------------------
+// INCOMING MESSAGES (POST)
 app.post("/webhook", async (req, res) => {
   console.log("Incoming webhook data:", JSON.stringify(req.body, null, 2));
 
@@ -141,20 +142,23 @@ app.post("/webhook", async (req, res) => {
       const from = msg.from; // user phone
       const msgType = msg.type;
 
-      // 1) TEXT messages
       if (msgType === "text") {
         const textBody = msg.text.body;
         await handleTextMessage(from, textBody);
-      }
-
-      // 2) INTERACTIVE (button) messages
-      else if (msgType === "interactive") {
+      } else if (msgType === "interactive") {
         const interactiveObj = msg.interactive;
-        if (interactiveObj.type === "button") {
+        // IMPORTANT FIX: check 'button_reply' or 'list_reply'
+        if (interactiveObj.type === "button_reply") {
           // Quick reply button
           const buttonId = interactiveObj.button_reply.id;
           const buttonTitle = interactiveObj.button_reply.title;
           await handleButtonReply(from, buttonId, buttonTitle);
+        } else if (interactiveObj.type === "list_reply") {
+          // If you used a list
+          const listId = interactiveObj.list_reply.id;
+          const listTitle = interactiveObj.list_reply.title;
+          console.log(`List reply: ${listId} / ${listTitle}`);
+          // Possibly handleListReply(...)
         } else {
           console.log(
             "Received interactive of another type:",
@@ -166,10 +170,8 @@ app.post("/webhook", async (req, res) => {
       }
     }
   }
-
   return res.sendStatus(200);
 });
-
 // ------------------- UNIFIED handleTextMessage -------------------
 async function handleTextMessage(userPhone, textBody) {
   const session = getSession(userPhone);
