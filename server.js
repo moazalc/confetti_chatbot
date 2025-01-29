@@ -20,19 +20,6 @@ import axios from "axios";
 import dotenv from "dotenv";
 dotenv.config();
 
-/* ENV VARIABLES:
-   - PORT=3000
-   - WEBHOOK_VERIFY_TOKEN=my_secret_token
-   - GRAPH_API_TOKEN=<YOUR_WHATSAPP_CLOUD_API_TOKEN>
-   - BUSINESS_PHONE_NUMBER_ID=<YOUR_PHONE_NUMBER_ID>
-*/
-const {
-  PORT = 3000,
-  WEBHOOK_VERIFY_TOKEN = "my_secret_token",
-  GRAPH_API_TOKEN = "",
-  BUSINESS_PHONE_NUMBER_ID = "",
-} = process.env;
-
 const app = express();
 app.use(express.json());
 
