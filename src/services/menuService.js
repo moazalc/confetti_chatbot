@@ -66,8 +66,8 @@ export const sendMainMenu = async (userPhone) => {
   }
   const bodyText =
     session.language === "ar"
-      ? "كيف يمكننا مساعدتك اليوم؟ يرجى اختيار إحدى الخيارات التالية:"
-      : "How can we assist you today? Please choose one of the following options:";
+      ? " يرجى اختيار إحدى الخيارات التالية:"
+      : "Please choose one of the following options:";
 
   const buttons = [
     {
@@ -97,12 +97,22 @@ export const sendMainMenu = async (userPhone) => {
  */
 export const sendCategoryMenu = async (userPhone, session) => {
   const categories = ["perfumes", "deodorants", "body sprays"];
+  const categoriesMap = {
+    perfumes: session.language === "ar" ? "عطور" : "Perfumes",
+    deodorants: session.language === "ar" ? "مزيلات العرق" : "Deodorants",
+    "body sprays": session.language === "ar" ? "رشاشات الجسم" : "Body sprays",
+  };
+
   const bodyText =
     session.language === "ar"
       ? `اختر تصنيف للمنتجات ${session.gender === "men" ? "رجالية" : "نسائية"}:`
       : `Choose a category for ${session.gender}:`;
 
-  const buttons = categories.map((cat) => ({ id: cat, title: cat }));
+  const buttons = categories.map((cat) => ({
+    id: cat,
+    title: categoriesMap[cat],
+  }));
+
   await sendInteractiveButtons(userPhone, bodyText, buttons);
 };
 

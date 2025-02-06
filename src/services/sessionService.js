@@ -5,12 +5,10 @@
  ***************************************************/
 
 export const sessions = {};
-export const orders = {};
 
 /**
- * Retrieves an existing session or creates a new one for the given phone.
- * @param {string} phone - The user's phone number.
- * @returns {object} The session object.
+ * Returns the session for a given phone number or creates a new one.
+ * New fields added: delivery_location and billing_address.
  */
 export const getSession = (phone) => {
   if (!sessions[phone]) {
@@ -20,8 +18,7 @@ export const getSession = (phone) => {
 };
 
 /**
- * Resets the session for the given phone number.
- * @param {string} phone - The user's phone number.
+ * Resets the session for the given phone.
  */
 export const resetSession = (phone) => {
   sessions[phone] = createNewSession(false);
@@ -29,8 +26,8 @@ export const resetSession = (phone) => {
 
 /**
  * Creates a new session object.
- * @param {boolean} isFirstTime - Indicates if this is the user's first interaction.
- * @returns {object} A new session object.
+ * @param {boolean} isFirstTime - Indicates if the user is interacting for the first time.
+ * @returns {object} Session object.
  */
 const createNewSession = (isFirstTime = true) => ({
   isFirstTime,
@@ -40,9 +37,10 @@ const createNewSession = (isFirstTime = true) => ({
   category: null,
   cart: [],
   name: null,
-  address: null,
-  currentProduct: null,
-  // Ticket fields
+  delivery_address: null, // New: Delivery address text
+  delivery_location: null, // New: Google Maps link or location data
+  billing_address: null, // New: Billing address text
+  // Ticket fields, etc.
   ticketName: null,
   ticketOrderNum: null,
   ticketTopic: null,
