@@ -14,6 +14,8 @@ import {
   sendTextMessage,
   sendInteractiveButtons,
   sendListMessage,
+  sendMediaMessage,
+  uploadMedia,
 } from "./messageService.js";
 import { getSession, resetSession } from "./sessionService.js";
 import { localize } from "../utils/localize.js";
@@ -128,7 +130,9 @@ const handleTextMessage = async (session, userPhone, textBody) => {
     if (isNaN(qty) || qty <= 0) {
       await sendTextMessage(
         userPhone,
-        "Please enter a valid numeric quantity or type 'menu'."
+        session.language === "ar"
+          ? "الرجاء إدخال كمية رقمية صالحة أو كتابة 'menu'."
+          : "Please enter a valid numeric quantity or type 'menu'."
       );
       return;
     }
@@ -139,16 +143,26 @@ const handleTextMessage = async (session, userPhone, textBody) => {
       quantity: qty,
     });
     session.currentProduct = null;
-
     session.state = "CART_DECISION";
-    const bodyText = `Added ${qty} x ${
-      session.cart[session.cart.length - 1].name
-    }.\nContinue or checkout?`;
+    const addedMsg =
+      session.language === "ar"
+        ? `تمت إضافة ${qty} × ${
+            session.cart[session.cart.length - 1].name
+          }.\nاستمر أم إنهاء الطلب؟`
+        : `Added ${qty} x ${
+            session.cart[session.cart.length - 1].name
+          }.\nContinue or Checkout?`;
     const buttons = [
-      { id: "CONTINUE", title: localize("Continue", session.language) },
-      { id: "CHECKOUT", title: localize("Checkout", session.language) },
+      {
+        id: "CONTINUE",
+        title: session.language === "ar" ? "استمر" : "Continue",
+      },
+      {
+        id: "CHECKOUT",
+        title: session.language === "ar" ? "إنهاء الطلب" : "Checkout",
+      },
     ];
-    await sendInteractiveButtons(userPhone, bodyText, buttons);
+    await sendInteractiveButtons(userPhone, addedMsg, buttons);
     return;
   }
 
@@ -159,10 +173,9 @@ const handleTextMessage = async (session, userPhone, textBody) => {
     session.state = "CHECKOUT_ADDRESS";
     await sendTextMessage(
       userPhone,
-      localize(
-        `Thanks, ${session.name}. Please type your delivery address now.`,
-        session.language
-      )
+      session.language === "ar"
+        ? `يرجى كتابة عنوان التوصيل الكامل الآن يا ${session.name}.`
+        : `Thanks, ${session.name}. Please type your full delivery address now.`
     );
     return;
   }
@@ -172,10 +185,9 @@ const handleTextMessage = async (session, userPhone, textBody) => {
     session.state = "CHECKOUT_DELIVERY_LOCATION";
     await sendTextMessage(
       userPhone,
-      localize(
-        "Please send your delivery location (share your location via WhatsApp or provide a Google Maps link).",
-        session.language
-      )
+      session.language === "ar"
+        ? "يرجى إرسال موقع التوصيل (شارك موقعك عبر واتساب أو قدم رابط خرائط جوجل)."
+        : "Please send your delivery location (share your location via WhatsApp or provide a Google Maps link)."
     );
     return;
   }
@@ -185,68 +197,86 @@ const handleTextMessage = async (session, userPhone, textBody) => {
     session.state = "CHECKOUT_BILLING_PROMPT";
     await sendTextMessage(
       userPhone,
-      localize(
-        "Is your billing address the same as your delivery address? Type 'yes' or 'no'.",
-        session.language
-      )
+      session.language === "ar"
+        ? "هل عنوان الفواتير هو نفسه عنوان التوصيل؟ اكتب 'نعم' أو 'لا'."
+        : "Is your billing address the same as your delivery address? Type 'yes' or 'no'."
     );
     return;
   }
+
+  // Checkout: Billing Address Prompt
   if (session.state === "CHECKOUT_BILLING_PROMPT") {
-    if (lowerText === "yes") {
+    if (lowerText === "yes" || lowerText === "نعم") {
       session.billing_address = session.delivery_address;
       session.state = "CHECKOUT_CONFIRM";
-      const cartSummary = session.cart
-        .map((c) => `${c.quantity} x ${c.name}`)
-        .join("\n");
-      const confirmMsg = localize(
-        `Your order:\n${cartSummary}\nDelivery Address: ${session.delivery_address}\nDelivery Location: ${session.delivery_location}\nBilling Address: ${session.billing_address}\nConfirm or cancel?`,
-        session.language
-      );
-      const confirmButtons = [
-        { id: "CONFIRM", title: localize("Confirm", session.language) },
-        { id: "CANCEL", title: localize("Cancel", session.language) },
-      ];
-      await sendInteractiveButtons(userPhone, confirmMsg, confirmButtons);
-    } else if (lowerText === "no") {
+    } else if (lowerText === "no" || lowerText === "لا") {
       session.state = "CHECKOUT_BILLING_ADDRESS";
       await sendTextMessage(
         userPhone,
-        localize("Please enter your billing address.", session.language)
+        session.language === "ar"
+          ? "يرجى إدخال عنوان الفواتير."
+          : "Please enter your billing address."
       );
+      return;
     } else {
       await sendTextMessage(
         userPhone,
-        localize("Please respond with 'yes' or 'no'.", session.language)
+        session.language === "ar"
+          ? "يرجى الرد بـ 'نعم' أو 'لا'."
+          : "Please respond with 'yes' or 'no'."
       );
+      return;
     }
-    return;
-  }
-  if (session.state === "CHECKOUT_BILLING_ADDRESS") {
-    session.billing_address = textBody;
-    session.state = "CHECKOUT_CONFIRM";
-    const cartSummary = session.cart
-      .map((c) => `${c.quantity} x ${c.name}`)
+    // Build confirmation message with individual prices and total.
+    const itemsSummary = session.cart
+      .map((c) => `${c.quantity} x ${c.name} @ ${c.price} each`)
       .join("\n");
-    const confirmMsg = localize(
-      `Your order:\n${cartSummary}\nDelivery Address: ${session.delivery_address}\nDelivery Location: ${session.delivery_location}\nBilling Address: ${session.billing_address}\nConfirm or cancel?`,
-      session.language
+    const total = session.cart.reduce(
+      (sum, c) => sum + c.quantity * c.price,
+      0
     );
+    const confirmMsg =
+      session.language === "ar"
+        ? `طلبك:\n${itemsSummary}\nالمجموع: ${total}\nعنوان التوصيل: ${session.delivery_address}\nموقع التوصيل: ${session.delivery_location}\nعنوان الفواتير: ${session.billing_address}\nتأكيد أم إلغاء؟`
+        : `Your order:\n${itemsSummary}\nTotal: ${total}\nDelivery Address: ${session.delivery_address}\nDelivery Location: ${session.delivery_location}\nBilling Address: ${session.billing_address}\nConfirm or cancel?`;
     const confirmButtons = [
-      { id: "CONFIRM", title: localize("Confirm", session.language) },
-      { id: "CANCEL", title: localize("Cancel", session.language) },
+      { id: "CONFIRM", title: session.language === "ar" ? "تأكيد" : "Confirm" },
+      { id: "CANCEL", title: session.language === "ar" ? "إلغاء" : "Cancel" },
     ];
     await sendInteractiveButtons(userPhone, confirmMsg, confirmButtons);
     return;
   }
+
+  // Checkout: Billing Address Input (if different)
+  if (session.state === "CHECKOUT_BILLING_ADDRESS") {
+    session.billing_address = textBody;
+    session.state = "CHECKOUT_CONFIRM";
+    const itemsSummary = session.cart
+      .map((c) => `${c.quantity} x ${c.name} @ ${c.price} each`)
+      .join("\n");
+    const total = session.cart.reduce(
+      (sum, c) => sum + c.quantity * c.price,
+      0
+    );
+    const confirmMsg =
+      session.language === "ar"
+        ? `طلبك:\n${itemsSummary}\nالمجموع: ${total}\nعنوان التوصيل: ${session.delivery_address}\nموقع التوصيل: ${session.delivery_location}\nعنوان الفواتير: ${session.billing_address}\nتأكيد أم إلغاء؟`
+        : `Your order:\n${itemsSummary}\nTotal: ${total}\nDelivery Address: ${session.delivery_address}\nDelivery Location: ${session.delivery_location}\nBilling Address: ${session.billing_address}\nConfirm or cancel?`;
+    const confirmButtons = [
+      { id: "CONFIRM", title: session.language === "ar" ? "تأكيد" : "Confirm" },
+      { id: "CANCEL", title: session.language === "ar" ? "إلغاء" : "Cancel" },
+    ];
+    await sendInteractiveButtons(userPhone, confirmMsg, confirmButtons);
+    return;
+  }
+
+  // Checkout: Confirmation (fallback text if user types at this stage)
   if (session.state === "CHECKOUT_CONFIRM") {
-    // In the text flow, if the user types something at this stage, prompt them to use the buttons.
     await sendTextMessage(
       userPhone,
-      localize(
-        "Please use the provided buttons to confirm or cancel your order.",
-        session.language
-      )
+      session.language === "ar"
+        ? "يرجى استخدام الأزرار لتأكيد أو إلغاء طلبك."
+        : "Please use the provided buttons to confirm or cancel your order."
     );
     return;
   }
@@ -381,10 +411,17 @@ const handleButtonReply = async (session, userPhone, buttonId) => {
           // Optionally, you can send the category menu again:
           await sendCategoryMenu(userPhone, session);
         } else {
-          const bodyText = localize(
-            `Please choose a product from ${selectedCategory}`,
-            session.language
-          );
+          const categoryTranslations = {
+            perfumes: "العطور",
+            deodorants: "مزيلات العرق",
+            "body sprays": "رشاشات الجسم",
+          };
+          const bodyText =
+            session.language === "ar"
+              ? `يرجى اختيار منتج من ${
+                  categoryTranslations[selectedCategory] || selectedCategory
+                }`
+              : `Please choose a product from ${selectedCategory}`;
           const productButtons = filteredProducts.map((product) => ({
             id: product.id,
             title: product.name + " ($" + product.price.toFixed(2) + ")",
@@ -408,12 +445,16 @@ const handleButtonReply = async (session, userPhone, buttonId) => {
         session.state = "CHECKOUT_NAME";
         await sendTextMessage(
           userPhone,
-          localize("Please type your full name.", session.language)
+          session.language === "ar"
+            ? "يرجى كتابة اسمك الكامل."
+            : "Please type your full name."
         );
       } else {
         await sendTextMessage(
           userPhone,
-          localize("Please pick Continue or Checkout.", session.language)
+          session.language === "ar"
+            ? "يرجى اختيار 'استمر' أو 'إنهاء الطلب'."
+            : "Please pick Continue or Checkout."
         );
       }
       break;
@@ -540,12 +581,15 @@ const finalizeOrder = async (userPhone, session) => {
 
       // Generate the PDF invoice and get the file path
       const invoicePath = await generateInvoice(orderData);
-
+      // Upload the invoice to get a media ID
+      const mediaId = await uploadMedia(invoicePath);
+      // Send Pdf invoice to the user
+      await sendMediaMessage(userPhone, invoicePath);
       // Send a confirmation message, optionally include the invoice path or link
       const confirmationMsg =
         session.language === "ar"
-          ? `شكراً! تم إنشاء طلبك (${orderId}). فاتورتك محفوظة في: ${invoicePath}`
-          : `Thank you! Your order (${orderId}) is placed. Your invoice is saved at: ${invoicePath}`;
+          ? `شكراً! تم إنشاء طلبك (${orderId}).فاتورتك : `
+          : `Thank you! Your order (${orderId}) is placed. Here's your invoice!`;
       await sendTextMessage(userPhone, confirmationMsg);
     } catch (err) {
       await connection.rollback();
